@@ -1,0 +1,52 @@
+[
+  {
+    "id": "f325d978-05d6-420a-8f26-7f12666757a3",
+    "question": "What is total orders?",
+    "generated_sql": "SELECT COUNT(*) FROM orders",
+    "natural_language_answer": null,
+    "data_sample": [],
+    "confidence_score": 0.9,
+    "created_from_feedback_id": "f1",
+    "created_at": "2026-08-22T22:32:28.358881",
+    "usage_count": 0,
+    "category": "simple_select"
+  },
+  {
+    "id": "2f5f1dfd-9a9a-400e-805c-114384c9f17c",
+    "question": "List the top 5 products with the highest unit price",
+    "generated_sql": "SELECT product_id, product_name, unit_price\nFROM products\nORDER BY unit_price DESC\nLIMIT 5",
+    "natural_language_answer": null,
+    "data_sample": [
+      {
+        "product_id": 9,
+        "product_name": "Mishi Kobe Niku",
+        "unit_price": 97.0
+      },
+      {
+        "product_id": 20,
+        "product_name": "Sir Rodney's Marmalade",
+        "unit_price": 81.0
+      },
+      {
+        "product_id": 18,
+        "product_name": "Carnarvon Tigers",
+        "unit_price": 62.5
+      },
+      {
+        "product_id": 8,
+        "product_name": "Northwoods Cranberry Sauce",
+        "unit_price": 40.0
+      },
+      {
+        "product_id": 17,
+        "product_name": "Alice Mutton",
+        "unit_price": 39.0
+      }
+    ],
+    "confidence_score": 1.0,
+    "created_from_feedback_id": "c09fec48-df39-4b4d-9779-d89bbac9e965",
+    "created_at": "2026-08-22T22:34:40.845208",
+    "usage_count": 0,
+    "category": "sorting"
+  }
+]
