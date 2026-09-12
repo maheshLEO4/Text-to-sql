@@ -32,7 +32,7 @@ Prerequisites: Python 3.11+, PostgreSQL, and a Groq API key.
 2. Install dependencies and start the API:
 
    ```bash
-   pip install -r requirements.txt
+   pip install -r backend-requirements.txt
    uvicorn api.main:app --reload --port 8000
    ```
 
@@ -68,9 +68,10 @@ GitHub Actions runs this test suite for pushes and pull requests to `main`.
 
 1. Never commit `.env`; use `.env.example` as the template.
 2. Change `POSTGRES_PASSWORD` and set a valid `GROQ_API_KEY` in the deployment environment.
-3. Configure `ALLOWED_ORIGINS` to only the deployed frontend origin(s).
-4. Confirm the containers start and `http://localhost:8000/health` returns `{"status":"ok"}`.
-5. Push the repository:
+3. For the Render API service, use `pip install -r backend-requirements.txt` as the build command.
+4. Configure `ALLOWED_ORIGINS` to only the deployed frontend origin(s).
+5. Confirm the containers start and `http://localhost:8000/health` returns `{"status":"ok"}`.
+6. Push the repository:
 
    ```bash
    git add .
