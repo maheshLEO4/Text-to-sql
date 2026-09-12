@@ -17,7 +17,12 @@ from datetime import datetime
 from typing import Dict, Any, List
 
 # Configuration
-API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
+try:
+    cloud_api_base_url = st.secrets.get("API_BASE_URL")
+except Exception:
+    cloud_api_base_url = None
+
+API_BASE_URL = (cloud_api_base_url or os.getenv("API_BASE_URL", "http://127.0.0.1:8000")).rstrip("/")
 QUERY_ENDPOINT = f"{API_BASE_URL}/v1/query"
 SCHEMA_ENDPOINT = f"{API_BASE_URL}/v1/schema"
 HISTORY_ENDPOINT = f"{API_BASE_URL}/v1/history"
