@@ -5,6 +5,7 @@ python-dotenv==1.0.0
 langchain-groq==0.1.0
 langchain-core==0.1.40
 sqlalchemy==2.0.23
+pandas==2.2.3
 sqlparse==0.4.4
 requests==2.31.0
 psycopg2-binary==2.9.9
