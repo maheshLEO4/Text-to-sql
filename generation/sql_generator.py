@@ -108,13 +108,22 @@ class SQLGenerator:
         chain = prompt | self.structured_llm
 
         # Invoke chain
-        response: SQLGenerationResponse = chain.invoke({
+        raw_response = chain.invoke({
             "system_prompt": system_prompt,
             "user_prompt": user_prompt
         })
 
-        if not response:
+        if not raw_response:
             raise ValueError("Failed to retrieve structured output from LangChain ChatGroq.")
+
+        # Some LangChain/Groq versions return a dict even when a Pydantic
+        # schema is supplied. Normalize both forms at this boundary so the
+        # rest of the pipeline can rely on SQLGenerationResponse attributes.
+        response = (
+            raw_response
+            if isinstance(raw_response, SQLGenerationResponse)
+            else SQLGenerationResponse.model_validate(raw_response)
+        )
 
         # Clean trailing semicolons & whitespace
         response.sql = response.sql.strip().rstrip(";")
