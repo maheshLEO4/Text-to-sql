@@ -75,10 +75,20 @@ class BacktranslationVerifier:
         """Executes backtranslation and returns structured evaluation result."""
         chain = self.prompt | self.structured_llm
         try:
-            result: BacktranslationVerificationResult = chain.invoke({
+            raw_result = chain.invoke({
                 "original_question": original_question,
                 "generated_sql": generated_sql
             })
+            if not raw_result:
+                raise ValueError("Failed to retrieve structured backtranslation output.")
+
+            # LangChain/Groq can return a dict despite the Pydantic schema.
+            # Normalize it here so confidence scoring can use model attributes.
+            result = (
+                raw_result
+                if isinstance(raw_result, BacktranslationVerificationResult)
+                else BacktranslationVerificationResult.model_validate(raw_result)
+            )
             return result
         except Exception as e:
             return BacktranslationVerificationResult(
