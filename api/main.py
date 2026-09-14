@@ -79,11 +79,11 @@ _HISTORY: List[HistoryEntry] = []
 # ---------------------------------------------------------------------------
 class QueryRequest(BaseModel):
     question: str = Field(..., min_length=1, description="Natural language question to answer.")
-    db_url: str = Field(..., min_length=1, description="PostgreSQL connection string for this request.")
+    db_url: Optional[str] = Field(None, description="Optional PostgreSQL connection string for this request.")
 
 
 class SchemaRequest(BaseModel):
-    db_url: str = Field(..., min_length=1, description="PostgreSQL connection string for this request.")
+    db_url: Optional[str] = Field(None, description="Optional PostgreSQL connection string for this request.")
 
 
 class QueryResponse(BaseModel):
@@ -137,6 +137,17 @@ def validate_database_url(db_url: str) -> str:
     return db_url
 
 
+def resolve_database_url(db_url: Optional[str]) -> str:
+    """Use a supplied connection or the server-configured demo database."""
+    if db_url:
+        return validate_database_url(db_url)
+
+    demo_db_url = os.getenv("DATABASE_URL")
+    if not demo_db_url:
+        raise HTTPException(status_code=500, detail="No demo database is configured on the backend.")
+    return validate_database_url(demo_db_url)
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -150,7 +161,7 @@ def post_query(request: QueryRequest) -> QueryResponse:
     try:
         result = run_pipeline(
             user_question=request.question,
-            db_url=validate_database_url(request.db_url),
+            db_url=resolve_database_url(request.db_url),
         )
     except Exception as e:
         # Anything that reaches here is an unexpected internal failure
@@ -173,7 +184,7 @@ def post_query(request: QueryRequest) -> QueryResponse:
 @app.post("/v1/schema", response_model=SchemaResponse)
 def get_schema(request: SchemaRequest) -> SchemaResponse:
     """Returns the current database schema (tables + formatted context string)."""
-    db_url = validate_database_url(request.db_url)
+    db_url = resolve_database_url(request.db_url)
 
     try:
         extractor = SchemaExtractor(db_url)

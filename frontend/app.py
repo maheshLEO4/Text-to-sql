@@ -85,6 +85,8 @@ if "db_url" not in st.session_state:
     st.session_state.db_url = ""
 if "readonly_acknowledged" not in st.session_state:
     st.session_state.readonly_acknowledged = False
+if "use_demo_database" not in st.session_state:
+    st.session_state.use_demo_database = True
 
 
 def call_api(endpoint: str, method: str = "GET", data: Dict[str, Any] = None) -> Dict[str, Any]:
@@ -277,26 +279,35 @@ st.markdown("Convert natural language questions to SQL queries with AI-powered g
 # Sidebar
 with st.sidebar:
     st.header("Database Connection")
-    st.warning(
-        "Create a dedicated database role with SELECT-only privileges before connecting. "
-        "Never use your Supabase owner or service-role credentials."
-    )
-    db_url_input = st.text_input(
-        "Supabase PostgreSQL connection string",
-        type="password",
-        placeholder="postgresql://readonly_user:password@.../postgres",
-        key="db_url_input",
-    )
     st.checkbox(
-        "I am using a dedicated SELECT-only database role.",
-        key="readonly_acknowledged",
+        "Use demo database",
+        key="use_demo_database",
+        help="Uses the database configured privately on the backend.",
     )
-    if db_url_input and st.session_state.readonly_acknowledged:
-        st.session_state.db_url = db_url_input.strip()
-    else:
+    if st.session_state.use_demo_database:
+        st.info("Demo mode uses the backend's configured DATABASE_URL.")
         st.session_state.db_url = ""
+    else:
+        st.warning(
+            "Create a dedicated database role with SELECT-only privileges before connecting. "
+            "Never use your Supabase owner or service-role credentials."
+        )
+        db_url_input = st.text_input(
+            "Supabase PostgreSQL connection string",
+            type="password",
+            placeholder="postgresql://readonly_user:password@.../postgres",
+            key="db_url_input",
+        )
+        st.checkbox(
+            "I am using a dedicated SELECT-only database role.",
+            key="readonly_acknowledged",
+        )
+        if db_url_input and st.session_state.readonly_acknowledged:
+            st.session_state.db_url = db_url_input.strip()
+        else:
+            st.session_state.db_url = ""
 
-    if st.session_state.db_url:
+    if st.session_state.use_demo_database or st.session_state.db_url:
         st.success("Connection details ready for this session.")
     else:
         st.info("Enter a connection string and confirm the SELECT-only role to begin.")
@@ -335,6 +346,21 @@ with st.sidebar:
 main_tab1, main_tab2, main_tab3 = st.tabs(["Query", "Schema", "Feedback Analytics"])
 
 with main_tab1:
+    demo_questions = [
+        "How many customers are from New York?",
+        "What is the total number of orders?",
+        "List the top 5 products with the highest unit price.",
+        "Which products have more than 50 units in stock?",
+    ]
+    if st.session_state.use_demo_database:
+        demo_question = st.selectbox(
+            "Demo questions",
+            ["Choose a sample question"] + demo_questions,
+        )
+        if st.button("Use question", disabled=demo_question == "Choose a sample question"):
+            st.session_state.question_input = demo_question
+            st.rerun()
+
     col1, col2 = st.columns([3, 1])
     
     with col1:
@@ -347,14 +373,17 @@ with main_tab1:
     with col2:
         submit_button = st.button("🚀 Execute", use_container_width=True)
     
-    if submit_button and question and not st.session_state.db_url:
+    if submit_button and question and not st.session_state.use_demo_database and not st.session_state.db_url:
         st.error("Connect a database with a confirmed SELECT-only role first.")
     elif submit_button and question:
         with st.spinner("⏳ Processing query through pipeline..."):
             result = call_api(
                 QUERY_ENDPOINT,
                 method="POST",
-                data={"question": question, "db_url": st.session_state.db_url},
+                data={
+                    "question": question,
+                    **({"db_url": st.session_state.db_url} if st.session_state.db_url else {}),
+                },
             )
             
             if result["success"]:
@@ -403,7 +432,7 @@ with main_tab2:
                 method="POST",
                 data={"db_url": st.session_state.db_url},
             )
-            if st.session_state.db_url
+            if st.session_state.use_demo_database or st.session_state.db_url
             else {"success": False, "error": "Connect a database first."}
         )
         
