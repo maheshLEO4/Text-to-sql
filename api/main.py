@@ -22,6 +22,7 @@ import sys
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -78,6 +79,11 @@ _HISTORY: List[HistoryEntry] = []
 # ---------------------------------------------------------------------------
 class QueryRequest(BaseModel):
     question: str = Field(..., min_length=1, description="Natural language question to answer.")
+    db_url: str = Field(..., min_length=1, description="PostgreSQL connection string for this request.")
+
+
+class SchemaRequest(BaseModel):
+    db_url: str = Field(..., min_length=1, description="PostgreSQL connection string for this request.")
 
 
 class QueryResponse(BaseModel):
@@ -120,6 +126,17 @@ class FeedbackStatsResponse(BaseModel):
     total_few_shot_examples: int
 
 
+def validate_database_url(db_url: str) -> str:
+    """Allow only PostgreSQL URLs and never persist or return the credential."""
+    parsed = urlparse(db_url)
+    if parsed.scheme not in {"postgresql", "postgresql+psycopg2"} or not parsed.hostname:
+        raise HTTPException(
+            status_code=400,
+            detail="Only a valid PostgreSQL/Supabase connection string is supported.",
+        )
+    return db_url
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -131,7 +148,10 @@ def post_query(request: QueryRequest) -> QueryResponse:
     confidence report. Also records the interaction in session history.
     """
     try:
-        result = run_pipeline(user_question=request.question)
+        result = run_pipeline(
+            user_question=request.question,
+            db_url=validate_database_url(request.db_url),
+        )
     except Exception as e:
         # Anything that reaches here is an unexpected internal failure
         # (e.g. missing API keys, DB connection errors) rather than an
@@ -150,12 +170,10 @@ def post_query(request: QueryRequest) -> QueryResponse:
     return QueryResponse(id=entry.id, result=result)
 
 
-@app.get("/v1/schema", response_model=SchemaResponse)
-def get_schema() -> SchemaResponse:
+@app.post("/v1/schema", response_model=SchemaResponse)
+def get_schema(request: SchemaRequest) -> SchemaResponse:
     """Returns the current database schema (tables + formatted context string)."""
-    db_url = os.getenv("DATABASE_URL")
-    if not db_url:
-        raise HTTPException(status_code=500, detail="DATABASE_URL is not set in environment variables.")
+    db_url = validate_database_url(request.db_url)
 
     try:
         extractor = SchemaExtractor(db_url)

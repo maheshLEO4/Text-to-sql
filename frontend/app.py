@@ -25,6 +25,7 @@ except Exception:
 API_BASE_URL = (cloud_api_base_url or os.getenv("API_BASE_URL", "http://127.0.0.1:8000")).rstrip("/")
 QUERY_ENDPOINT = f"{API_BASE_URL}/v1/query"
 SCHEMA_ENDPOINT = f"{API_BASE_URL}/v1/schema"
+HEALTH_ENDPOINT = f"{API_BASE_URL}/health"
 HISTORY_ENDPOINT = f"{API_BASE_URL}/v1/history"
 FEEDBACK_ENDPOINT = f"{API_BASE_URL}/v1/feedback"
 FEEDBACK_STATS_ENDPOINT = f"{API_BASE_URL}/v1/feedback/stats"
@@ -80,6 +81,10 @@ if "current_response" not in st.session_state:
     st.session_state.current_response = None
 if "feedback_status" not in st.session_state:
     st.session_state.feedback_status = {}
+if "db_url" not in st.session_state:
+    st.session_state.db_url = ""
+if "readonly_acknowledged" not in st.session_state:
+    st.session_state.readonly_acknowledged = False
 
 
 def call_api(endpoint: str, method: str = "GET", data: Dict[str, Any] = None) -> Dict[str, Any]:
@@ -271,6 +276,32 @@ st.markdown("Convert natural language questions to SQL queries with AI-powered g
 
 # Sidebar
 with st.sidebar:
+    st.header("Database Connection")
+    st.warning(
+        "Create a dedicated database role with SELECT-only privileges before connecting. "
+        "Never use your Supabase owner or service-role credentials."
+    )
+    db_url_input = st.text_input(
+        "Supabase PostgreSQL connection string",
+        type="password",
+        placeholder="postgresql://readonly_user:password@.../postgres",
+        key="db_url_input",
+    )
+    st.checkbox(
+        "I am using a dedicated SELECT-only database role.",
+        key="readonly_acknowledged",
+    )
+    if db_url_input and st.session_state.readonly_acknowledged:
+        st.session_state.db_url = db_url_input.strip()
+    else:
+        st.session_state.db_url = ""
+
+    if st.session_state.db_url:
+        st.success("Connection details ready for this session.")
+    else:
+        st.info("Enter a connection string and confirm the SELECT-only role to begin.")
+
+    st.markdown("---")
     st.header("ℹ️ Information")
     st.markdown("""
     ### How it works:
@@ -294,7 +325,7 @@ with st.sidebar:
     
     st.markdown("---")
     st.markdown("**API Status:**")
-    api_status = call_api(SCHEMA_ENDPOINT)
+    api_status = call_api(HEALTH_ENDPOINT)
     if api_status["success"]:
         st.success("✅ API Connected")
     else:
@@ -316,9 +347,15 @@ with main_tab1:
     with col2:
         submit_button = st.button("🚀 Execute", use_container_width=True)
     
-    if submit_button and question:
+    if submit_button and question and not st.session_state.db_url:
+        st.error("Connect a database with a confirmed SELECT-only role first.")
+    elif submit_button and question:
         with st.spinner("⏳ Processing query through pipeline..."):
-            result = call_api(QUERY_ENDPOINT, method="POST", data={"question": question})
+            result = call_api(
+                QUERY_ENDPOINT,
+                method="POST",
+                data={"question": question, "db_url": st.session_state.db_url},
+            )
             
             if result["success"]:
                 response_data = result["data"]
@@ -360,7 +397,15 @@ with main_tab2:
     st.subheader("Database Schema")
     
     with st.spinner("Loading schema..."):
-        schema_result = call_api(SCHEMA_ENDPOINT)
+        schema_result = (
+            call_api(
+                SCHEMA_ENDPOINT,
+                method="POST",
+                data={"db_url": st.session_state.db_url},
+            )
+            if st.session_state.db_url
+            else {"success": False, "error": "Connect a database first."}
+        )
         
         if schema_result["success"]:
             schema_data = schema_result["data"]
