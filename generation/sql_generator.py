@@ -13,7 +13,7 @@ load_dotenv(override=True)
 
 def get_model_name(model_name: str | None = None) -> str:
     """Resolve the Groq LLM model from the environment and allow direct override."""
-    return (model_name or os.getenv("GROQ_MODEL") or "openai/gpt-oss-120b").strip()
+    return (model_name or os.getenv("GROQ_MODEL") or "llama-3.1-8b-instant").strip()
 
 
 class SQLGenerationResponse(BaseModel):
