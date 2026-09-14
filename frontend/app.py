@@ -26,7 +26,6 @@ API_BASE_URL = (cloud_api_base_url or os.getenv("API_BASE_URL", "http://127.0.0.
 QUERY_ENDPOINT = f"{API_BASE_URL}/v1/query"
 SCHEMA_ENDPOINT = f"{API_BASE_URL}/v1/schema"
 HEALTH_ENDPOINT = f"{API_BASE_URL}/health"
-HISTORY_ENDPOINT = f"{API_BASE_URL}/v1/history"
 FEEDBACK_ENDPOINT = f"{API_BASE_URL}/v1/feedback"
 FEEDBACK_STATS_ENDPOINT = f"{API_BASE_URL}/v1/feedback/stats"
 FEEDBACK_TEST_CASES_ENDPOINT = f"{API_BASE_URL}/v1/feedback/test-cases"
@@ -87,6 +86,10 @@ if "readonly_acknowledged" not in st.session_state:
     st.session_state.readonly_acknowledged = False
 if "use_demo_database" not in st.session_state:
     st.session_state.use_demo_database = True
+if "schema_connection_key" not in st.session_state:
+    st.session_state.schema_connection_key = None
+if "schema_data" not in st.session_state:
+    st.session_state.schema_data = None
 
 
 def call_api(endpoint: str, method: str = "GET", data: Dict[str, Any] = None) -> Dict[str, Any]:
@@ -108,6 +111,12 @@ def call_api(endpoint: str, method: str = "GET", data: Dict[str, Any] = None) ->
         return {"success": False, "error": f"API error: {e.response.status_code} - {e.response.text}"}
     except Exception as e:
         return {"success": False, "error": f"Error: {str(e)}"}
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def backend_is_healthy(endpoint: str) -> bool:
+    """Cache the public health check to avoid a request on every rerun."""
+    return call_api(endpoint)["success"]
 
 
 def display_result(result: Dict[str, Any], query_id: str = ""):
@@ -313,31 +322,16 @@ with st.sidebar:
         st.info("Enter a connection string and confirm the SELECT-only role to begin.")
 
     st.markdown("---")
-    st.header("ℹ️ Information")
-    st.markdown("""
-    ### How it works:
-    1. **Enter a question** about your database
-    2. **Pipeline processes** through multiple stages:
-       - Schema extraction & filtering
-       - Ambiguity detection
-       - SQL generation
-       - Security guardrails
-       - Sandboxed execution
-       - Hallucination detection
-       - Confidence scoring
-    3. **View results** with confidence metrics
-    
-    ### Status Indicators:
-    - ✅ **SUCCESS** - Query executed successfully
-    - ⚠️ **AMBIGUOUS** - Query needs clarification
-    - 🚫 **GUARDRAIL_BLOCKED** - Security check failed
-    - ❌ **EXECUTION_FAILED** - Database error
-    """)
+    with st.expander("How it works"):
+        st.markdown(
+            "Schema extraction → SQL generation → read-only guardrails → "
+            "sandboxed execution → confidence checks."
+        )
+        st.caption("Results can be marked correct or incorrect to improve future prompts.")
     
     st.markdown("---")
     st.markdown("**API Status:**")
-    api_status = call_api(HEALTH_ENDPOINT)
-    if api_status["success"]:
+    if backend_is_healthy(HEALTH_ENDPOINT):
         st.success("✅ API Connected")
     else:
         st.error("❌ API Disconnected")
@@ -424,33 +418,39 @@ with main_tab1:
 
 with main_tab2:
     st.subheader("Database Schema")
-    
-    with st.spinner("Loading schema..."):
-        schema_result = (
-            call_api(
-                SCHEMA_ENDPOINT,
-                method="POST",
-                data={"db_url": st.session_state.db_url},
-            )
-            if st.session_state.use_demo_database or st.session_state.db_url
-            else {"success": False, "error": "Connect a database first."}
-        )
-        
-        if schema_result["success"]:
-            schema_data = schema_result["data"]
-            
-            if "tables" in schema_data:
-                st.write(f"**Total Tables:** {len(schema_data['tables'])}")
-                cols = st.columns(3)
-                for idx, table in enumerate(schema_data["tables"]):
-                    with cols[idx % 3]:
-                        st.write(f"• {table}")
-            
-            if "formatted_schema" in schema_data:
-                st.subheader("Formatted Schema")
-                st.code(schema_data["formatted_schema"], language="sql")
-        else:
-            st.error(schema_result["error"])
+
+    connection_key = "demo" if st.session_state.use_demo_database else st.session_state.db_url
+    if connection_key != st.session_state.schema_connection_key:
+        st.session_state.schema_connection_key = connection_key
+        st.session_state.schema_data = None
+
+    if not connection_key:
+        st.info("Connect a database first.")
+    else:
+        if st.session_state.schema_data is None:
+            with st.spinner("Loading schema..."):
+                schema_result = call_api(
+                    SCHEMA_ENDPOINT,
+                    method="POST",
+                    data={"db_url": st.session_state.db_url}
+                    if st.session_state.db_url
+                    else {},
+                )
+            if schema_result["success"]:
+                st.session_state.schema_data = schema_result["data"]
+            else:
+                st.error(schema_result["error"])
+
+        schema_data = st.session_state.schema_data
+        if schema_data:
+            st.write(f"**Total Tables:** {len(schema_data.get('tables', []))}")
+            cols = st.columns(3)
+            for idx, table in enumerate(schema_data.get("tables", [])):
+                with cols[idx % 3]:
+                    st.write(f"• {table}")
+
+            st.subheader("Formatted Schema")
+            st.code(schema_data.get("formatted_schema", ""), language="sql")
 
 with main_tab3:
     st.subheader("🎯 Feedback Loop & Flywheel")
