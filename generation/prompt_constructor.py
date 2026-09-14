@@ -111,6 +111,17 @@ class PromptConstructor:
 
 ### FEW-SHOT EXAMPLES:
 {few_shot_str}
+
+### RESPONSE FORMAT:
+Return ONLY a valid JSON object with these fields:
+{{
+    "sql": "SELECT ...",
+    "explanation": "brief explanation",
+    "confidence_score": 0.0,
+    "tables_accessed": ["table_name"],
+    "columns_accessed": ["column_name"]
+}}
+Do not use markdown fences or return any text outside the JSON object.
 """
         return system_prompt
 

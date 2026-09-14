@@ -62,10 +62,11 @@ class SQLGenerator:
             groq_api_key=api_key,
         )
 
-        # Attach Pydantic model using LangChain's function calling strategy
+        # JSON mode avoids forcing a tool call on models that sometimes answer
+        # directly instead of emitting the requested function invocation.
         self.structured_llm = self.llm.with_structured_output(
             SQLGenerationResponse,
-            method="function_calling"
+            method="json_mode"
         )
 
     def validate_sql_syntax(self, sql_query: str) -> bool:
