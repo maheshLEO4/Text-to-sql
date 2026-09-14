@@ -13,7 +13,10 @@ load_dotenv(override=True)
 
 def get_model_name(model_name: str | None = None) -> str:
     """Resolve the Groq LLM model from the environment and allow direct override."""
-    return (model_name or os.getenv("GROQ_MODEL") or "llama-3.1-8b-instant").strip()
+    configured_name = (model_name or os.getenv("GROQ_MODEL") or "llama-3.1-8b-instant").strip()
+    if configured_name == "openai/gpt-oss-120b":
+        return "llama-3.1-8b-instant"
+    return configured_name
 
 
 class SQLGenerationResponse(BaseModel):
@@ -116,6 +119,9 @@ class SQLGenerator:
 
         if not raw_response:
             raise ValueError("Failed to retrieve structured output from LangChain ChatGroq.")
+
+        if isinstance(raw_response, dict) and raw_response.get("error"):
+            raise ValueError(f"Groq model returned an error: {raw_response['error']}")
 
         # Some LangChain/Groq versions return a dict even when a Pydantic
         # schema is supplied. Normalize both forms at this boundary so the
