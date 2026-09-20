@@ -12,7 +12,7 @@ load_dotenv(override=True)
 
 def get_model_name(model_name: str | None = None) -> str:
     """Resolve the LLM model from env, falling back to a safe Groq default."""
-    return (model_name or os.getenv("GROQ_MODEL") or "llama-3.1-8b-instant").strip()
+    return (model_name or os.getenv("GROQ_MODEL") or "openai/gpt-oss-120b").strip()
 
 
 class SQLGeneratorPipeline:
