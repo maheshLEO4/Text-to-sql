@@ -16,6 +16,7 @@ apart as the pipeline evolves.
 """
 
 import os
+import re
 import sys
 from typing import Any, Dict, List, Optional
 
@@ -70,6 +71,26 @@ class PipelineResult(BaseModel):
     few_shots_count: int = 0
 
 
+def detect_destructive_request(user_question: str) -> Optional[str]:
+    """Detect SQL write/DDL commands before schema or LLM processing."""
+    patterns = (
+        r"\bDROP\s+(?:TABLE|DATABASE|SCHEMA|VIEW|INDEX)\b",
+        r"\bDELETE\s+FROM\b",
+        r"\bUPDATE\s+[\w\".]+\s+SET\b",
+        r"\bINSERT\s+INTO\b",
+        r"\bALTER\s+(?:TABLE|DATABASE|SCHEMA)\b",
+        r"\bTRUNCATE(?:\s+TABLE)?\b",
+        r"\bCREATE\s+(?:TABLE|DATABASE|SCHEMA|VIEW|INDEX)\b",
+        r"\b(?:GRANT|REVOKE|VACUUM|REINDEX)\b",
+    )
+
+    for pattern in patterns:
+        match = re.search(pattern, user_question, flags=re.IGNORECASE)
+        if match:
+            return f"Destructive SQL command detected: '{match.group(0)}'."
+    return None
+
+
 def run_pipeline(user_question: str, db_url: Optional[str] = None) -> PipelineResult:
     """
     Runs the full Text-to-SQL pipeline for a single question and returns a
@@ -78,6 +99,14 @@ def run_pipeline(user_question: str, db_url: Optional[str] = None) -> PipelineRe
     via `status` instead, so callers (API, CLI, evals) can branch on it
     without wrapping every call in try/except.
     """
+    destructive_reason = detect_destructive_request(user_question)
+    if destructive_reason:
+        return PipelineResult(
+            status="GUARDRAIL_BLOCKED",
+            question=user_question,
+            guardrail_rejection_reason=destructive_reason,
+        )
+
     db_url = db_url or os.getenv("DATABASE_URL")
     if not db_url:
         return PipelineResult(
