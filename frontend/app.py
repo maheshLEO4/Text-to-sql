@@ -116,7 +116,7 @@ def call_api(endpoint: str, method: str = "GET", data: Dict[str, Any] = None) ->
 
         if detail:
             if e.response.status_code == 400 and method == "POST" and endpoint == QUERY_ENDPOINT:
-                return {"success": False, "error": f"I can't do that. {detail}"}
+                return {"success": False, "error": str(detail)}
             return {"success": False, "error": str(detail)}
 
         return {"success": False, "error": f"API error: {e.response.status_code} - {e.response.text}"}
