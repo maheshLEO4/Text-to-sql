@@ -17,15 +17,24 @@ class ModelRefusalError(ValueError):
 
 def is_model_refusal_message(message: str) -> bool:
     """Identify provider messages that mean the requested operation was refused."""
-    normalized_message = message.lower()
+    normalized_message = (
+        message.lower()
+        .replace("’", "'")
+        .replace("‘", "'")
+        .replace("“", '"')
+        .replace("”", '"')
+    )
     return any(
         phrase in normalized_message
         for phrase in (
             "can't help",
             "cannot help",
+            "can't assist",
+            "cannot assist",
             "can't fulfill",
             "cannot fulfill",
             "refuse",
+            "i'm sorry, but i can't",
             "read-only",
             "read only",
             "not allowed",
