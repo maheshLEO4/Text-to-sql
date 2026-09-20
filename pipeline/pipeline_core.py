@@ -82,6 +82,7 @@ def detect_destructive_request(user_question: str) -> Optional[str]:
         r"\bTRUNCATE(?:\s+TABLE)?\b",
         r"\bCREATE\s+(?:TABLE|DATABASE|SCHEMA|VIEW|INDEX)\b",
         r"\b(?:GRANT|REVOKE|VACUUM|REINDEX)\b",
+        r"\b(?:DELETE|DROP|REMOVE|DESTROY|TRUNCATE)\s+(?:ALL\s+)?(?:THE\s+)?[\w\".]+\b",
     )
 
     for pattern in patterns:

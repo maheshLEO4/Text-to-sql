@@ -37,6 +37,7 @@ if _ROOT_DIR not in sys.path:
 from pipeline.pipeline_core import run_pipeline, PipelineResult
 from pipeline.feedback_store import FeedbackStore
 from ingestion.schema_extractor import SchemaExtractor
+from generation.sql_generator import ModelRefusalError
 
 # Initialize feedback store
 feedback_store = FeedbackStore()
@@ -148,6 +149,32 @@ def resolve_database_url(db_url: Optional[str]) -> str:
     return validate_database_url(demo_db_url)
 
 
+def query_error_response(error: Exception) -> HTTPException:
+    """Convert expected model refusals into a safe client-facing response."""
+    if isinstance(error, ModelRefusalError):
+        return HTTPException(
+            status_code=400,
+            detail="The model cannot fulfill this request. This application only supports read-only SELECT queries.",
+        )
+    return HTTPException(status_code=500, detail=f"Pipeline execution error: {str(error)}")
+
+
+def pipeline_result_error_response(result: PipelineResult) -> Optional[HTTPException]:
+    """Convert expected pipeline rejection statuses into client errors."""
+    if result.status != "GUARDRAIL_BLOCKED":
+        return None
+
+    reason = result.guardrail_rejection_reason or "The query was blocked by the read-only SQL guardrails."
+    if "destructive" in reason.lower() or any(
+        keyword in reason.upper()
+        for keyword in ("DROP", "DELETE", "UPDATE", "INSERT", "ALTER", "TRUNCATE")
+    ):
+        detail = "Destructive queries are not permitted. This application only supports read-only SELECT queries."
+    else:
+        detail = f"Query blocked by security guardrails: {reason}"
+    return HTTPException(status_code=400, detail=detail)
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -168,7 +195,11 @@ def post_query(request: QueryRequest) -> QueryResponse:
         # (e.g. missing API keys, DB connection errors) rather than an
         # expected pipeline outcome, which run_pipeline already reports
         # via `status` without raising.
-        raise HTTPException(status_code=500, detail=f"Pipeline execution error: {str(e)}")
+        raise query_error_response(e)
+
+    pipeline_error = pipeline_result_error_response(result)
+    if pipeline_error:
+        raise pipeline_error
 
     entry = HistoryEntry(
         id=str(uuid.uuid4()),

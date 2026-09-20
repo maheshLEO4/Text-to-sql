@@ -11,6 +11,10 @@ from generation.prompt_constructor import PromptConstructor, FewShotExample
 load_dotenv(override=True)
 
 
+class ModelRefusalError(ValueError):
+    """Raised when the model refuses to generate SQL for a request."""
+
+
 def get_model_name(model_name: str | None = None) -> str:
     """Resolve the Groq LLM model from the environment and allow direct override."""
     return (model_name or os.getenv("GROQ_MODEL") or "openai/gpt-oss-120b").strip()
@@ -118,7 +122,13 @@ class SQLGenerator:
             raise ValueError("Failed to retrieve structured output from LangChain ChatGroq.")
 
         if isinstance(raw_response, dict) and raw_response.get("error"):
-            raise ValueError(f"Groq model returned an error: {raw_response['error']}")
+            error_message = str(raw_response["error"])
+            if any(
+                phrase in error_message.lower()
+                for phrase in ("can't help", "cannot help", "can't fulfill", "cannot fulfill", "refuse")
+            ):
+                raise ModelRefusalError(error_message)
+            raise ValueError(f"Groq model returned an error: {error_message}")
 
         # Some LangChain/Groq versions return a dict even when a Pydantic
         # schema is supplied. Normalize both forms at this boundary so the
