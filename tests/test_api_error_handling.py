@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import patch
 
 from api.main import QueryRequest, pipeline_result_error_response, post_query, query_error_response
-from generation.sql_generator import ModelRefusalError
+from generation.sql_generator import ModelRefusalError, extract_model_refusal
 from pipeline.pipeline_core import PipelineResult
 
 
@@ -11,12 +11,23 @@ class ApiErrorHandlingTests(unittest.TestCase):
         error = query_error_response(ModelRefusalError("I cannot fulfill that request."))
 
         self.assertEqual(error.status_code, 400)
-        self.assertIn("read-only SELECT", error.detail)
+        self.assertEqual(error.detail, "I cannot fulfill that request.")
 
     def test_unexpected_pipeline_error_remains_server_error(self):
         error = query_error_response(RuntimeError("database unavailable"))
 
         self.assertEqual(error.status_code, 500)
+
+    def test_provider_metadata_is_removed_from_model_refusal(self):
+        provider_error = (
+            "Error code: 400 - {'error': {'message': 'Failed to generate JSON. "
+            "', 'failed_generation': 'I’m sorry, but I can’t help with that.'}}"
+        )
+
+        self.assertEqual(
+            extract_model_refusal(provider_error),
+            "I’m sorry, but I can’t help with that.",
+        )
 
     def test_guardrail_block_is_a_client_error(self):
         error = pipeline_result_error_response(PipelineResult(
@@ -27,7 +38,10 @@ class ApiErrorHandlingTests(unittest.TestCase):
 
         self.assertIsNotNone(error)
         self.assertEqual(error.status_code, 400)
-        self.assertIn("Destructive queries are not permitted", error.detail)
+        self.assertEqual(
+            error.detail,
+            "I'm not allowed to make changes to your database. I can only help with read-only SELECT queries.",
+        )
 
     @patch("api.main.resolve_database_url", return_value="postgresql://example.test/db")
     @patch("api.main.run_pipeline")

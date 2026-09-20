@@ -37,7 +37,7 @@ if _ROOT_DIR not in sys.path:
 from pipeline.pipeline_core import run_pipeline, PipelineResult
 from pipeline.feedback_store import FeedbackStore
 from ingestion.schema_extractor import SchemaExtractor
-from generation.sql_generator import ModelRefusalError
+from generation.sql_generator import ModelRefusalError, extract_model_refusal
 
 # Initialize feedback store
 feedback_store = FeedbackStore()
@@ -152,10 +152,7 @@ def resolve_database_url(db_url: Optional[str]) -> str:
 def query_error_response(error: Exception) -> HTTPException:
     """Convert expected model refusals into a safe client-facing response."""
     if isinstance(error, ModelRefusalError):
-        return HTTPException(
-            status_code=400,
-            detail="The model cannot fulfill this request. This application only supports read-only SELECT queries.",
-        )
+        return HTTPException(status_code=400, detail=extract_model_refusal(str(error)))
     return HTTPException(status_code=500, detail=f"Pipeline execution error: {str(error)}")
 
 
@@ -169,7 +166,7 @@ def pipeline_result_error_response(result: PipelineResult) -> Optional[HTTPExcep
         keyword in reason.upper()
         for keyword in ("DROP", "DELETE", "UPDATE", "INSERT", "ALTER", "TRUNCATE")
     ):
-        detail = "Destructive queries are not permitted. This application only supports read-only SELECT queries."
+        detail = "I'm not allowed to make changes to your database. I can only help with read-only SELECT queries."
     else:
         detail = f"Query blocked by security guardrails: {reason}"
     return HTTPException(status_code=400, detail=detail)

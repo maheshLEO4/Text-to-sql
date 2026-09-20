@@ -1,4 +1,5 @@
 import os
+import re
 import sqlparse
 from typing import List, Optional
 from dotenv import load_dotenv
@@ -13,6 +14,22 @@ load_dotenv(override=True)
 
 class ModelRefusalError(ValueError):
     """Raised when the model refuses to generate SQL for a request."""
+
+
+def extract_model_refusal(message: str) -> str:
+    """Return the model's refusal text without exposing provider diagnostics."""
+    failed_generation = re.search(
+        r"failed_generation['\"]?\s*:\s*['\"](.+)['\"]\s*[},]*$",
+        message,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if failed_generation:
+        return failed_generation.group(1).strip()
+
+    if not any(marker in message.lower() for marker in ("error code:", "failed_generation", "invalid_request_error")):
+        return message.strip()
+
+    return "The request was declined by the model."
 
 
 def is_model_refusal_message(message: str) -> bool:
