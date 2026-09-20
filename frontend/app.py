@@ -108,6 +108,17 @@ def call_api(endpoint: str, method: str = "GET", data: Dict[str, Any] = None) ->
     except requests.exceptions.Timeout:
         return {"success": False, "error": "API request timed out."}
     except requests.exceptions.HTTPError as e:
+        try:
+            payload = e.response.json()
+            detail = payload.get("detail") if isinstance(payload, dict) else None
+        except ValueError:
+            detail = None
+
+        if detail:
+            if e.response.status_code == 400 and method == "POST" and endpoint == QUERY_ENDPOINT:
+                return {"success": False, "error": f"I can't do that. {detail}"}
+            return {"success": False, "error": str(detail)}
+
         return {"success": False, "error": f"API error: {e.response.status_code} - {e.response.text}"}
     except Exception as e:
         return {"success": False, "error": f"Error: {str(e)}"}
