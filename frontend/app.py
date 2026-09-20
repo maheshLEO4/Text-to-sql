@@ -382,6 +382,8 @@ with main_tab1:
         st.error("Connect a database with a confirmed SELECT-only role first.")
     elif submit_button and question:
         with st.spinner("⏳ Processing query through pipeline..."):
+            # Do not keep showing a previous successful result after a failed request.
+            st.session_state.current_response = None
             result = call_api(
                 QUERY_ENDPOINT,
                 method="POST",

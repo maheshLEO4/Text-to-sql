@@ -15,6 +15,27 @@ class ModelRefusalError(ValueError):
     """Raised when the model refuses to generate SQL for a request."""
 
 
+def is_model_refusal_message(message: str) -> bool:
+    """Identify provider messages that mean the requested operation was refused."""
+    normalized_message = message.lower()
+    return any(
+        phrase in normalized_message
+        for phrase in (
+            "can't help",
+            "cannot help",
+            "can't fulfill",
+            "cannot fulfill",
+            "refuse",
+            "read-only",
+            "read only",
+            "not allowed",
+            "requested operation is an update",
+            "requested operation is a delete",
+            "requested operation is an insert",
+        )
+    )
+
+
 def get_model_name(model_name: str | None = None) -> str:
     """Resolve the Groq LLM model from the environment and allow direct override."""
     return (model_name or os.getenv("GROQ_MODEL") or "openai/gpt-oss-120b").strip()
@@ -113,20 +134,23 @@ class SQLGenerator:
         chain = prompt | self.structured_llm
 
         # Invoke chain
-        raw_response = chain.invoke({
-            "system_prompt": system_prompt,
-            "user_prompt": user_prompt
-        })
+        try:
+            raw_response = chain.invoke({
+                "system_prompt": system_prompt,
+                "user_prompt": user_prompt
+            })
+        except Exception as error:
+            error_message = str(error)
+            if is_model_refusal_message(error_message):
+                raise ModelRefusalError(error_message) from error
+            raise
 
         if not raw_response:
             raise ValueError("Failed to retrieve structured output from LangChain ChatGroq.")
 
         if isinstance(raw_response, dict) and raw_response.get("error"):
             error_message = str(raw_response["error"])
-            if any(
-                phrase in error_message.lower()
-                for phrase in ("can't help", "cannot help", "can't fulfill", "cannot fulfill", "refuse")
-            ):
+            if is_model_refusal_message(error_message):
                 raise ModelRefusalError(error_message)
             raise ValueError(f"Groq model returned an error: {error_message}")
 
